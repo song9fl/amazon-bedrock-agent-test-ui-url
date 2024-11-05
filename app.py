@@ -49,7 +49,7 @@ if prompt := st.chat_input():
         )
         output_text = response["output_text"]
 
-        # Refactored citation insertion
+        # Refactored citation handling with placeholder cleanup
         try:
             if response["citations"]:
                 citations_text = ""
@@ -58,14 +58,16 @@ if prompt := st.chat_input():
                     citation_marker = f"[{i}]"
                     citations_text += f"{citation_marker} {retrieved_ref['location']['s3Location']['uri']}\n"
                 
-                output_text += "\n" + citations_text  # Append citations at the end of output_text
+                # Append all citations at the end of output_text
+                output_text += "\n" + citations_text  
             else:
-                # Remove stray placeholders if no citations are available
-                output_text = output_text.replace("%[1]%", "").replace("%[2]%", "").replace("%[3]%", "").replace("%[4]%", "")
+                # Remove any placeholders like %X% that are not replaced
+                for x in range(1, 5):  # Adjust the range if there are more placeholders
+                    output_text = output_text.replace(f"%[{x}]%", "")
         except KeyError as e:
             print(f"Error processing citations: {e}")
 
-        # Display the final formatted output
+        # Display the final cleaned output text
         placeholder.markdown(output_text, unsafe_allow_html=True)
         st.session_state.messages.append({"role": "assistant", "content": output_text})
         st.session_state.citations = response.get("citations", [])

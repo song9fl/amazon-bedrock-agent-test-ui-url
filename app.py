@@ -51,15 +51,15 @@ if prompt := st.chat_input():
 
         # Refactored citation handling with placeholder cleanup
         try:
+            citations_text = ""
             if response["citations"]:
-                citations_text = ""
                 for i, citation in enumerate(response["citations"], start=1):
                     retrieved_ref = citation["retrievedReferences"][0]  # Assuming single reference per citation
                     citation_marker = f"[{i}]"
                     citations_text += f"{citation_marker} {retrieved_ref['location']['s3Location']['uri']}\n"
                 
                 # Append all citations at the end of output_text
-                output_text += "\n" + citations_text  
+                output_text += "\n\n" + citations_text.strip()  # Ensure citations are neatly separated
             else:
                 # Remove any placeholders like %X% that are not replaced
                 for x in range(1, 5):  # Adjust the range if there are more placeholders
@@ -73,6 +73,7 @@ if prompt := st.chat_input():
         st.session_state.citations = response.get("citations", [])
         st.session_state.trace = response.get("trace", {})
 
+# Sidebar for trace information
 trace_types_map = {
     "Pre-Processing": ["preGuardrailTrace", "preProcessingTrace"],
     "Orchestration": ["orchestrationTrace"],
@@ -85,11 +86,10 @@ trace_info_types_map = {
     "postProcessingTrace": ["modelInvocationInput", "modelInvocationOutput", "observation"]
 }
 
-# Sidebar section for trace
 with st.sidebar:
     st.title("Trace")
 
-    # Show each trace types in separate sections
+    # Show each trace type in separate sections
     step_num = 1
     for trace_type_header in trace_types_map:
         st.subheader(trace_type_header)
@@ -102,7 +102,6 @@ with st.sidebar:
                 trace_steps = {}
 
                 for trace in st.session_state.trace[trace_type]:
-                    # Each trace type and step may have different information for the end-to-end flow
                     if trace_type in trace_info_types_map:
                         trace_info_types = trace_info_types_map[trace_type]
                         for trace_info_type in trace_info_types:
@@ -115,33 +114,30 @@ with st.sidebar:
                                 break
                     else:
                         trace_id = trace["traceId"]
-                        trace_steps[trace_id] = [
-                            {
-                                trace_type: trace
-                            }
-                        ]
+                        trace_steps[trace_id] = [{trace_type: trace}]
 
                 # Show trace steps in JSON similar to the Bedrock console
                 for trace_id in trace_steps.keys():
-                    with st.expander(f"Trace Step " + str(step_num), expanded=False):
+                    with st.expander(f"Trace Step {step_num}", expanded=False):
                         for trace in trace_steps[trace_id]:
                             trace_str = json.dumps(trace, indent=2)
                             st.code(trace_str, language="json", line_numbers=trace_str.count("\n"))
-                    step_num = step_num + 1
+                    step_num += 1
         if not has_trace:
             st.text("None")
 
+    # Display citations in the sidebar if available
     st.subheader("Citations")
-    if len(st.session_state.citations) > 0:
+    if st.session_state.citations:
         citation_num = 1
         for citation in st.session_state.citations:
-            for retrieved_ref_num, retrieved_ref in enumerate(citation["retrievedReferences"]):
-                with st.expander("Citation [" + str(citation_num) + "]", expanded=False):
+            for retrieved_ref in citation["retrievedReferences"]:
+                with st.expander(f"Citation [{citation_num}]", expanded=False):
                     citation_str = json.dumps({
                         "generatedResponsePart": citation["generatedResponsePart"],
-                        "retrievedReference": citation["retrievedReferences"][retrieved_ref_num]
+                        "retrievedReference": retrieved_ref
                     }, indent=2)
-                    st.code(citation_str, language="json", line_numbers=trace_str.count("\n"))
-                citation_num = citation_num + 1
+                    st.code(citation_str, language="json", line_numbers=citation_str.count("\n"))
+                citation_num += 1
     else:
         st.text("None")

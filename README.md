@@ -2,6 +2,7 @@
 changes made by song9fl
 - url enabled
 - message formatting cleaned
+- sidebar disabled
 
 
 # Agents for Amazon Bedrock Test UI

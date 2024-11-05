@@ -8,7 +8,7 @@ import uuid
 # Get config from environment variables
 agent_id = os.environ.get("BEDROCK_AGENT_ID")
 agent_alias_id = os.environ.get("BEDROCK_AGENT_ALIAS_ID", "TSTALIASID")  # Default test alias ID
-ui_title = os.environ.get("BEDROCK_AGENT_TEST_UI_TITLE", "Agents for Amazon Bedrock Test UI")
+ui_title = os.environ.get("BEDROCK_AGENT_TEST_UI_TITLE", "Learning Assistant Chatbot")
 ui_icon = os.environ.get("BEDROCK_AGENT_TEST_UI_ICON")
 
 def init_state():
@@ -89,9 +89,15 @@ if prompt := st.chat_input():
                     if https_url not in unique_citations:
                         unique_citations[https_url] = f"[{len(unique_citations) + 1}] [{https_url}]({https_url})"
 
-            # Construct the final citations text and remove all placeholder patterns like %[X]%
+            # Construct the final citations text and remove all placeholder patterns like %[X]%, [X], and %%
             citations_text = "\n".join(unique_citations.values())
+
+            # Remove any remaining placeholder patterns like %[X]% or [X] and any standalone %%
             result_text = re.sub(r"%\[\d+\]%+", "", result_text)  # Remove any %[X]% pattern
+            result_text = re.sub(r"\[\d+\]", "", result_text)     # Remove any [X] pattern
+            result_text = re.sub(r"\s*%%\s*", "", result_text)    # Remove any standalone %% pattern
+            result_text = re.sub(r'"+$', '', result_text)  # Remove any trailing quotes
+
             if citations_text:
                 result_text += "\n\n" + citations_text
         

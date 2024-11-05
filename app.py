@@ -1,4 +1,5 @@
 import json
+import re
 import os
 from services import bedrock_agent_runtime
 import streamlit as st
@@ -6,7 +7,7 @@ import uuid
 
 # Get config from environment variables
 agent_id = os.environ.get("BEDROCK_AGENT_ID")
-agent_alias_id = os.environ.get("BEDROCK_AGENT_ALIAS_ID", "TSTALIASID")  # TSTALIASID is the default test alias ID
+agent_alias_id = os.environ.get("BEDROCK_AGENT_ALIAS_ID", "TSTALIASID")  # Default test alias ID
 ui_title = os.environ.get("BEDROCK_AGENT_TEST_UI_TITLE", "Agents for Amazon Bedrock Test UI")
 ui_icon = os.environ.get("BEDROCK_AGENT_TEST_UI_ICON")
 
@@ -50,14 +51,22 @@ if prompt := st.chat_input():
             prompt
         )
 
-        output_text = response["output_text"]
+        output_text = response.get("output_text", "No response text available")
+
+        # Step 1: Try to parse as JSON and extract the "result" field
+        result_text = ""
+        try:
+            parsed_output = json.loads(output_text)
+            result_text = parsed_output.get("result", output_text)
+        except json.JSONDecodeError:
+            # Step 2: If not JSON, clean out instruction text using regex
+            result_text = re.sub(r'^{.*?"result":\s*"(.*?)"}', r'\1', output_text)
 
         # Refactored citation handling with fallback to trace and unique clickable citations
         try:
-            citations_text = ""
             unique_citations = {}
-            if response["citations"]:  # If citations are directly available
-                for i, citation in enumerate(response["citations"], start=1):
+            if response.get("citations"):  # If citations are directly available
+                for citation in response["citations"]:
                     retrieved_ref = citation["retrievedReferences"][0]
                     s3_uri = retrieved_ref["location"]["s3Location"]["uri"]
                     
@@ -65,7 +74,6 @@ if prompt := st.chat_input():
                     https_url = s3_uri.replace("s3://kcknowledgebase/", "https://miscdocsihave.s3.us-east-1.amazonaws.com/")
                     
                     if https_url not in unique_citations:
-                        # Make the citation clickable with HTTPS link
                         unique_citations[https_url] = f"[{len(unique_citations) + 1}] [{https_url}]({https_url})"
             else:  # Fallback to using trace if citations are empty
                 trace_references = []
@@ -81,18 +89,18 @@ if prompt := st.chat_input():
                     if https_url not in unique_citations:
                         unique_citations[https_url] = f"[{len(unique_citations) + 1}] [{https_url}]({https_url})"
 
-            # Construct the final citations text
+            # Construct the final citations text and remove all placeholder patterns like %[X]%
             citations_text = "\n".join(unique_citations.values())
-
-            # Append citations to output_text if available, or show a placeholder message
-            output_text += "\n\n" + citations_text if citations_text else "\n\n(No citations available)"
+            result_text = re.sub(r"%\[\d+\]%+", "", result_text)  # Remove any %[X]% pattern
+            if citations_text:
+                result_text += "\n\n" + citations_text
         
         except KeyError as e:
             st.write(f"Error processing citations: {e}")
 
-        # Display the final cleaned output text
-        placeholder.markdown(output_text, unsafe_allow_html=True)
-        st.session_state.messages.append({"role": "assistant", "content": output_text})
+        # Display the final cleaned result text
+        placeholder.markdown(result_text, unsafe_allow_html=True)
+        st.session_state.messages.append({"role": "assistant", "content": result_text})
         st.session_state.citations = response.get("citations", [])
         st.session_state.trace = response.get("trace", {})
 
@@ -103,48 +111,21 @@ trace_types_map = {
     "Post-Processing": ["postProcessingTrace", "postGuardrailTrace"]
 }
 
-trace_info_types_map = {
-    "preProcessingTrace": ["modelInvocationInput", "modelInvocationOutput"],
-    "orchestrationTrace": ["invocationInput", "modelInvocationInput", "modelInvocationOutput", "observation", "rationale"],
-    "postProcessingTrace": ["modelInvocationInput", "modelInvocationOutput", "observation"]
-}
-
 with st.sidebar:
     st.title("Trace")
 
-    # Show each trace type in separate sections
     step_num = 1
     for trace_type_header in trace_types_map:
         st.subheader(trace_type_header)
 
-        # Organize traces by step similar to how it is shown in the Bedrock console
         has_trace = False
         for trace_type in trace_types_map[trace_type_header]:
             if trace_type in st.session_state.trace:
                 has_trace = True
-                trace_steps = {}
-
                 for trace in st.session_state.trace[trace_type]:
-                    if trace_type in trace_info_types_map:
-                        trace_info_types = trace_info_types_map[trace_type]
-                        for trace_info_type in trace_info_types:
-                            if trace_info_type in trace:
-                                trace_id = trace[trace_info_type]["traceId"]
-                                if trace_id not in trace_steps:
-                                    trace_steps[trace_id] = [trace]
-                                else:
-                                    trace_steps[trace_id].append(trace)
-                                break
-                    else:
-                        trace_id = trace["traceId"]
-                        trace_steps[trace_id] = [{trace_type: trace}]
-
-                # Show trace steps in JSON similar to the Bedrock console
-                for trace_id in trace_steps.keys():
                     with st.expander(f"Trace Step {step_num}", expanded=False):
-                        for trace in trace_steps[trace_id]:
-                            trace_str = json.dumps(trace, indent=2)
-                            st.code(trace_str, language="json", line_numbers=trace_str.count("\n"))
+                        trace_str = json.dumps(trace, indent=2)
+                        st.code(trace_str, language="json")
                     step_num += 1
         if not has_trace:
             st.text("None")
@@ -160,7 +141,7 @@ with st.sidebar:
                         "generatedResponsePart": citation["generatedResponsePart"],
                         "retrievedReference": retrieved_ref
                     }, indent=2)
-                    st.code(citation_str, language="json", line_numbers=citation_str.count("\n"))
+                    st.code(citation_str, language="json")
                 citation_num += 1
     else:
         st.text("None")

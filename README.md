@@ -1,3 +1,9 @@
+**11052024
+changes made by song9fl
+- url enabled
+- message formatting cleaned
+
+
 # Agents for Amazon Bedrock Test UI
 
 A generic Streamlit UI for testing generative AI agents built using Agents for Amazon Bedrock. For more information, refer to the blog post [Developing a Generic Streamlit UI to Test Amazon Bedrock Agents](https://blog.avangards.io/developing-a-generic-streamlit-ui-to-test-amazon-bedrock-agents).

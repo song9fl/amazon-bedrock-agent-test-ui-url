@@ -3,6 +3,7 @@ changes made by song9fl
 - url enabled
 - message formatting cleaned
 - sidebar disabled
+<img width="1427" alt="image" src="https://github.com/user-attachments/assets/da8c990b-42d2-42f1-98df-686dd962a111">
 
 
 # Agents for Amazon Bedrock Test UI
